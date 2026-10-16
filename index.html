@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#1f3a34">
+<title>Simulador de amortização</title>
+<style>
+:root{--bg:#f3f5f2;--card:#fff;--ink:#17211e;--mut:#5d6b66;--line:#d9dfdb;--ac:#1f6f5c;--acink:#fff;--bad:#b3261e;--ok:#1f6f5c;--soft:#e4efe9}
+@media (prefers-color-scheme:dark){:root{--bg:#121a17;--card:#1b2622;--ink:#e8efec;--mut:#9aaba4;--line:#2d3b36;--ac:#4cb89c;--acink:#0d1512;--bad:#ff8a80;--ok:#4cb89c;--soft:#22332d}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:12px;padding-bottom:40px}
+main{max-width:1100px;margin:0 auto}
+#bar{display:none}
+@media (max-width:899px){
+ body{padding-bottom:76px}
+ #bar{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:5;justify-content:space-between;gap:12px;padding:10px 16px;background:var(--card);border-top:1px solid var(--line);font-variant-numeric:tabular-nums}
+}
+@media (min-width:900px){
+ .layout{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:14px;align-items:start}
+ .side{position:sticky;top:12px;max-height:calc(100vh - 24px);overflow:auto}
+}
+h1{font-size:1.3rem;margin:6px 0 12px}
+h2{font-size:1rem;margin:0 0 10px}
+section{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:12px}
+label{display:block;font-size:.85rem;color:var(--mut);margin-bottom:4px}
+input[type=date],input[type=number],textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit}
+.row{display:flex;gap:10px;flex-wrap:wrap}.row>div{flex:1;min-width:150px}
+button{font:inherit;padding:9px 12px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink);cursor:pointer}
+button.p{background:var(--ac);color:var(--acink);border-color:var(--ac);font-weight:600}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+.btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.item{display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid var(--line)}
+.item:last-child{border:0}.item input{width:20px;height:20px;flex:none}
+.item .n{font-weight:600;min-width:34px}.item .d{color:var(--mut);font-size:.9rem;flex:1}
+.item .v{text-align:right;font-variant-numeric:tabular-nums}.item .v small{display:block;color:var(--mut);text-decoration:line-through}
+.item.sel{background:var(--soft)}
+.sum{display:grid;grid-template-columns:1fr auto;gap:6px 12px;font-variant-numeric:tabular-nums}
+.sum b{text-align:right}.big{font-size:1.15rem}
+.ok{color:var(--ok)}.bad{color:var(--bad)}
+.st{display:flex;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid var(--line);font-size:.92rem}
+.note{font-size:.8rem;color:var(--mut);margin-top:8px}
+details summary{cursor:pointer;color:var(--mut);font-size:.9rem}
+textarea{min-height:90px;font:12px monospace}
+</style>
+</head>
+<body>
+<main>
+<h1>Simulador de amortização – Santander</h1>
+<div class="layout">
+<div class="col">
+
+<section>
+  <div class="row">
+    <div><label for="dt">Data da simulação</label><input type="date" id="dt"></div>
+    <div><label for="av">Valor disponível (R$)</label><input type="number" id="av" step="0.01" min="0" inputmode="decimal" placeholder="0,00"></div>
+  </div>
+  <div class="btns"><button id="hoje">Hoje</button></div>
+  <details style="margin-top:10px"><summary>Parâmetros do contrato</summary>
+    <div class="row" style="margin-top:8px">
+      <div><label for="pm">Parcela (R$)</label><input type="number" id="pm" step="0.01"></div>
+      <div><label for="tx">Taxa ao mês (%)</label><input type="number" id="tx" step="0.01"></div>
+    </div>
+    <p class="note">Valor presente = parcela ÷ (1 + taxa)^(dias corridos até o vencimento ÷ 30). Parcela vencida na data escolhida entra pelo valor cheio.</p>
+  </details>
+</section>
+
+<section>
+  <h2>Parcelas em aberto</h2>
+  <div class="btns" style="margin:0 0 6px">
+    <button id="todas">Todas</button><button id="limpar">Limpar</button>
+    <button id="nIni">Primeiras N</button><button id="nFim">Últimas N</button>
+    <input type="number" id="n" min="1" value="4" style="width:70px" aria-label="N parcelas">
+  </div>
+  <div class="btns" style="margin:0 0 8px">
+    <button id="fitIni">Encaixar no valor (do começo)</button>
+    <button id="fitFim">Encaixar no valor (do fim)</button>
+  </div>
+  <div id="lista"></div>
+</section>
+
+</div>
+<aside class="col side">
+<section>
+  <h2>Resultado</h2>
+  <div class="sum" id="res"></div>
+  <div class="btns"><button class="p" id="salvar">Salvar como etapa</button></div>
+  <p class="note">Valores calculados pelo contrato. Pode haver diferença de centavos; vale o valor oficial do app do banco no momento da quitação.</p>
+</section>
+
+<section>
+  <h2>Etapas salvas</h2>
+  <div id="etapas"></div>
+  <div class="btns">
+    <button id="desfazer">Desfazer última</button>
+    <button id="zerar">Apagar todas</button>
+  </div>
+  <details style="margin-top:12px"><summary>Backup / levar para outro aparelho</summary>
+    <textarea id="json" aria-label="JSON"></textarea>
+    <div class="btns"><button id="exp">Gerar backup</button><button id="imp">Importar</button></div>
+  </details>
+</section>
+</aside>
+</div>
+<div id="bar" aria-live="polite"></div>
+</main>
+
+<script>
+const $=id=>document.getElementById(id);
+const brl=v=>v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+const DAY=86400000;
+const cfg={pm:698.85,tx:6.74};
+let etapas=[];          // {data:'YYYY-MM-DD', ids:[...], total:n}
+let sel=new Set();
+const KEY='amort-santander-v1';
+
+// parcelas 8..24, vencimento dia 01 de jan/2027 a mai/2028
+const parcelas=[];
+for(let n=8;n<=24;n++)parcelas.push({n,due:Date.UTC(2027,n-8,1)});
+
+function load(){try{const s=JSON.parse(localStorage.getItem(KEY)||'null');if(s){etapas=s.etapas||[];if(s.pm)cfg.pm=s.pm;if(s.tx)cfg.tx=s.tx;}}catch(e){}}
+function save(){try{localStorage.setItem(KEY,JSON.stringify({etapas,pm:cfg.pm,tx:cfg.tx}))}catch(e){}}
+function hojeISO(){const d=new Date();return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10)}
+function simTs(){const v=$('dt').value;if(!v)return null;const[a,m,d]=v.split('-').map(Number);return Date.UTC(a,m-1,d)}
+function vp(p,ts){const dias=Math.max(0,Math.round((p.due-ts)/DAY));return Math.round(cfg.pm/Math.pow(1+cfg.tx/100,dias/30)*100)/100}
+function pagas(){return new Set(etapas.flatMap(e=>e.ids))}
+function abertas(){const pg=pagas();return parcelas.filter(p=>!pg.has(p.n))}
+const fmtD=ts=>new Date(ts).toISOString().slice(8,10)+'/'+new Date(ts).toISOString().slice(5,7)+'/'+new Date(ts).toISOString().slice(0,4);
+const fmtISO=s=>s.split('-').reverse().join('/');
+
+function render(){
+  const ts=simTs(), ab=abertas();
+  sel=new Set([...sel].filter(n=>ab.some(p=>p.n===n)));
+  $('lista').innerHTML=ts===null?'<p class="note">Escolha uma data.</p>':
+    ab.length?ab.map(p=>{const v=vp(p,ts),c=sel.has(p.n);
+      return `<label class="item ${c?'sel':''}"><input type="checkbox" data-n="${p.n}" ${c?'checked':''}>
+      <span class="n">${p.n}</span><span class="d">${fmtD(p.due)}</span>
+      <span class="v">${brl(v)}${v<cfg.pm?`<small>${brl(cfg.pm)}</small>`:''}</span></label>`}).join(''):'<p class="note">Todas as parcelas já foram quitadas nas etapas.</p>';
+  if(ts===null){$('res').innerHTML='';$('bar').innerHTML='';return}
+  const av=parseFloat($('av').value)||0;
+  let tot=0,cheio=0,rest=0,q=0;
+  ab.forEach(p=>{const v=vp(p,ts);if(sel.has(p.n)){tot+=v;cheio+=cfg.pm;q++}else rest+=v});
+  tot=Math.round(tot*100)/100;rest=Math.round(rest*100)/100;
+  const dif=Math.round((av-tot)*100)/100;
+  const todo=ab.reduce((s,p)=>s+vp(p,ts),0);
+  $('res').innerHTML=`
+   <span>Parcelas selecionadas</span><b>${q}</b>
+   <span>Total a pagar</span><b class="big">${brl(tot)}</b>
+   <span>${av?(dif>=0?'Sobra':'Falta'):'Valor disponível'}</span><b class="${av?(dif>=0?'ok':'bad'):''}">${av?brl(Math.abs(dif)):'—'}</b>
+   <span>Saldo devedor restante</span><b>${brl(rest)}</b>
+   <span>Economia vs. valor cheio</span><b>${brl(cheio-tot)}</b>
+   <span>Saldo devedor total hoje</span><b>${brl(Math.round(todo*100)/100)}</b>`;
+  $('bar').innerHTML=`<span>Total <b>${brl(tot)}</b></span><span class="${av?(dif>=0?'ok':'bad'):''}">${av?(dif>=0?'Sobra ':'Falta ')+'<b>'+brl(Math.abs(dif))+'</b>':''}</span>`;
+  $('etapas').innerHTML=etapas.length?etapas.map((e,i)=>`<div class="st"><span>${i+1}) ${fmtISO(e.data)} · parcelas ${e.ids.join(', ')}</span><b>${brl(e.total)}</b></div>`).join(''):'<p class="note">Nenhuma etapa salva.</p>';
+}
+
+function fit(fromEnd){
+  const ts=simTs();if(ts===null)return;let av=parseFloat($('av').value)||0;
+  const ab=abertas();if(fromEnd)ab.reverse();sel=new Set();
+  for(const p of ab){const v=vp(p,ts);if(v<=av+0.001){sel.add(p.n);av-=v}else break}
+  render();
+}
+$('lista').addEventListener('change',e=>{const n=+e.target.dataset.n;e.target.checked?sel.add(n):sel.delete(n);render()});
+['dt','av'].forEach(i=>$(i).addEventListener('input',render));
+$('pm').addEventListener('input',()=>{cfg.pm=parseFloat($('pm').value)||cfg.pm;save();render()});
+$('tx').addEventListener('input',()=>{cfg.tx=parseFloat($('tx').value)||cfg.tx;save();render()});
+$('hoje').onclick=()=>{$('dt').value=hojeISO();render()};
+$('todas').onclick=()=>{sel=new Set(abertas().map(p=>p.n));render()};
+$('limpar').onclick=()=>{sel=new Set();render()};
+$('nIni').onclick=()=>{const n=+$('n').value||0;sel=new Set(abertas().slice(0,n).map(p=>p.n));render()};
+$('nFim').onclick=()=>{const n=+$('n').value||0;const a=abertas();sel=new Set(a.slice(Math.max(0,a.length-n)).map(p=>p.n));render()};
+$('fitIni').onclick=()=>fit(false);
+$('fitFim').onclick=()=>fit(true);
+$('salvar').onclick=()=>{
+  const ts=simTs();if(ts===null||!sel.size)return alert('Escolha a data e ao menos uma parcela.');
+  const ab=abertas().filter(p=>sel.has(p.n));
+  const total=Math.round(ab.reduce((s,p)=>s+vp(p,ts),0)*100)/100;
+  etapas.push({data:$('dt').value,ids:ab.map(p=>p.n),total});
+  sel=new Set();save();render();
+};
+$('desfazer').onclick=()=>{etapas.pop();save();render()};
+$('zerar').onclick=()=>{if(confirm('Apagar todas as etapas salvas?')){etapas=[];save();render()}};
+$('exp').onclick=()=>{$('json').value=JSON.stringify({etapas,pm:cfg.pm,tx:cfg.tx})};
+$('imp').onclick=()=>{try{const s=JSON.parse($('json').value);etapas=s.etapas||[];if(s.pm)cfg.pm=s.pm;if(s.tx)cfg.tx=s.tx;$('pm').value=cfg.pm;$('tx').value=cfg.tx;save();render()}catch(e){alert('JSON inválido.')}};
+
+load();
+$('pm').value=cfg.pm;$('tx').value=cfg.tx;$('dt').value=hojeISO();
+render();
+</script>
+</body>
+</html>
